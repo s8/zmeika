@@ -209,6 +209,10 @@ class module():
     def read_led(self):
         print 'readLed method prototype'
 
+    def store_path(self):#
+        packet = packet_start + packet_pointer + self.module_id + packet_divider + 'p' + packet_end
+        self.send_packet(packet)
+
     def watch_serial():
         global packets
         global enc_entries
@@ -245,7 +249,7 @@ class module():
 
 class Zmeika(Frame):
 
-    global serial_queue
+   # global serial_queue
 
     global module_list
 
@@ -302,6 +306,7 @@ class Zmeika(Frame):
             led_buttons[i]["command"] = m.toggle_led
             led_sliders[i]["command"] = m.set_led
             #enc_buttons[i]["command"] = m.read_enc
+            m.store_path() 
             module_list.append(m)
             a += '1'
 
@@ -318,8 +323,8 @@ app = Zmeika(master=root)
 serial_monitor = threading.Thread(target=watch_serial)
 serial_monitor.start()
 
-gui_updater = threading.Thread(target = update_GUI)
-gui_updater.start()
+#gui_updater = threading.Thread(target = update_GUI)
+#gui_updater.start()
 
 
 app.mainloop()

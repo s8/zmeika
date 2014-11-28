@@ -23,16 +23,19 @@
 //#define BLINK PINA = _BV(5);
 
 volatile int16_t position = 0;
-volatile int16_t lastPosition = 0;
+//volatile int16_t lastPosition = 0;
 volatile bool position_changed = false;
 static volatile uint8_t state = 0;
+
+unsigned char path_to_host[apa_max_packet];
+unsigned char path_to_host_length = 0;
 
 //
 // process the packet
 //
 void apa_process_packet(struct apa_port_type *port) {
    uint16_t pwm; //,ad;
-   unsigned char pwml, pwmh; //, adl, adh;
+   unsigned char pwml, pwmh, i; //, adl, adh;
    //
    // execute command
    //
@@ -90,10 +93,14 @@ void apa_process_packet(struct apa_port_type *port) {
          port->payload_out[1] = pwml;
          port->payload_out_length = 2;
          break;
-      case 'i':   // i: return ID
+      case 'p': // save path to host for future usage
+         for (i = 0; i < port->path_out_length; ++i)
+            path_to_host[i] = port->path_out[i];
+         path_to_host_length = port->path_out_length;
          port->payload_out[0] = port->id;
          port->payload_out_length = 1;
          break;
+
       case ' ':   // do nothing
          port->path_out_length = 0;
          port->payload_out_length = 0;
@@ -125,7 +132,6 @@ ISR (PCINT0_vect){
 //
 void updateEncoder(void){
 
-   lastPosition = position;
    //                           _______         _______       
    //               Pin1 ______|       |_______|       |______ Pin1
    // negative <---         _______         _______         __      --> positive
@@ -161,16 +167,12 @@ void updateEncoder(void){
          break;
       case 1: case 7: case 8: case 14:
          position = 1; position_changed = true; break;
-         //position++; break;
       case 2: case 4: case 11: case 13:
          position = 2; position_changed = true; break;
-         //position--; break;
       case 3: case 12:
          position = 3; position_changed = true; break;
-         //position += 2; break;
       default:
          position = 4; position_changed = true; break;
-         //position -= 2; break;
    }
    state = (s >> 2); // shift two bits left to keep the old ones XXXX => **XX
 }
@@ -180,20 +182,19 @@ void updateEncoder(void){
 
 void apa_encoder_check(struct apa_port_type *port) {
 
-   //if (lastPosition != position) {
-   if (position_changed){
+   unsigned char i;
+
+   if (position_changed && (path_to_host_length != 0)){
       
       position_changed = false;
-      lastPosition = position;
 
-      // port->path_out[0] = 0;
-      port->path_out[1] = 0;
-      // port->path_out[2] = 0;
-      port->path_out_length = 1;
+      for (i = 0; i < path_to_host_length; ++i)
+         port->path_out[i] = path_to_host[i];
+      port->path_out_length = path_to_host_length;
 
       port->payload_out[0] = position;
       port->payload_out_length = 1;
-      
+
       //BLINK;
 
    } else {
@@ -206,7 +207,7 @@ void apa_encoder_check(struct apa_port_type *port) {
 //
 
 int main(void) {
-   static struct apa_port_type port_0, port_1, port_2;
+   static struct apa_port_type port_0, port_1; //, port_2;
    //
    // set clock divider to /1
    //
@@ -255,21 +256,21 @@ int main(void) {
    port_1.path_in_length = 0;
    port_1.path_out_length = 0;
    port_1.id = '1';
-   port_1.next_port = &port_2;
+   port_1.next_port = &port_0; /// !!!!!!!!!!!!!!!!!!!!!!!!!
    clear(*port_1.port_out, port_1.pin_out);
    output(*port_1.direction_out, port_1.pin_out);
    //
-   port_2.pins_in = &PINA;
-   port_2.port_out = &PORTA;
-   port_2.direction_out = &DDRA;
-   port_2.pin_in = (1 << PA4);
-   port_2.pin_out = (1 << PA6);
-   port_2.path_in_length = 0;
-   port_2.path_out_length = 0;
-   port_2.id = '2';
-   port_2.next_port = &port_0;
-   clear(*port_2.port_out, port_2.pin_out);
-   output(*port_2.direction_out, port_2.pin_out);
+   // port_2.pins_in = &PINA;
+   // port_2.port_out = &PORTA;
+   // port_2.direction_out = &DDRA;
+   // port_2.pin_in = (1 << PA4);
+   // port_2.pin_out = (1 << PA6);
+   // port_2.path_in_length = 0;
+   // port_2.path_out_length = 0;
+   // port_2.id = '2';
+   // port_2.next_port = &port_0;
+   // clear(*port_2.port_out, port_2.pin_out);
+   // output(*port_2.direction_out, port_2.pin_out);
    
    //
    // power on delay
@@ -287,7 +288,19 @@ int main(void) {
    while (1) {
       apa_port_scan(&port_0);
       apa_port_scan(&port_1);
-      apa_port_scan(&port_2);
+      //apa_port_scan(&port_2);
       apa_encoder_check(&port_0);
+
+      //
+      // check for sync start
+      //
+      // if (0 != pin_test(*port_1.pins_in, port_1.pin_in)) {
+      //    apa_get_packet(&port_1);
+      //    if (port_1.path_in_length != 0) {
+      //       apa_move_packet(&port_1,&port_0);
+      //       apa_put_packet(&port_0);
+      //       }
+      // }
+      
    }
 }
