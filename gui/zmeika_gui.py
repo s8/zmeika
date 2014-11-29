@@ -11,10 +11,10 @@ import Queue
 import threading
 import os
 
-packets = list()
-packets.append ('abc')
+serial_monitor_flag = True
 
-enc_entries = list()
+#packets = list()
+#packets.append ('abc')
 
 serial_queue = Queue.Queue()
 
@@ -22,9 +22,13 @@ module_list = list()
 
 num_modules = 2
 
-#
-# define special chars
-#
+ser = serial.Serial("/dev/tty.usbserial-A603OPB4", 57600)
+ser.flushInput()
+ser.flushOutput()
+
+#----------------------------------------------------------
+# define special APA chars
+#----------------------------------------------------------
 packet_start = '{'
 packet_pointer = '^'
 packet_divider = '|'
@@ -33,23 +37,9 @@ packet_escape = '\\'
 timeout_count = 1000
 char_delay = 0.001
 
-#
-# test for waiting chars
-#
-def test_waiting():
-   check_count = 0
-   while 1:
-      if (0 != ser.inWaiting()):
-         return 1
-      check_count += 1
-      if (check_count == timeout_count):
-         print "test_waiting: timeout"
-         return 0
-      time.sleep(char_delay)
-
-#
+#----------------------------------------------------------
 # check for waiting chars and exit on timeout
-#
+#----------------------------------------------------------
 def check_waiting():
    check_count = 0
    while 1:
@@ -62,48 +52,9 @@ def check_waiting():
       time.sleep(char_delay)
    return
 
-ser = serial.Serial("/dev/tty.usbserial-A603OPB4", 57600)
-ser.flushInput()
-ser.flushOutput()
-
-#
-# Globabl serial watching function
-#
-def watch_serial():
-    global packets
-    global enc_entries
-
-    incoming_packet  = list()
-    print "started!"
-    while (1):
-        char = ser.read().encode('hex')
-        incoming_packet += char
-        incoming_packet += ':'
-        if (char == packet_end.encode('hex')):
-            print incoming_packet[:-1]
-            packets[0] = incoming_packet
-            # serial_queue.put(incoming_packet)
-            incoming_packet = ""
-
-            # functional, but slow way to do this
-            # enc_entries[0].config(state = NORMAL)
-            # enc_entries[0].delete(0,END)
-            # enc_entries[0].insert(0, str(packets[0][12 :-4]))
-            # enc_entries[0].config(state = DISABLED)
-
-def update_GUI():
-    while True:
-        enc_entries[0].delete(0,END)
-        enc_entries[0].insert(0, str(packets[0][12:-4]))
-        # enc_entries[0].insert(0, "yo")
-        # if not serial_queue.empty():
-        #     enc_entries[0].delete(0,END)
-        #     enc_entries[0].insert(0, str(serial_queue.get()[12 :-4]))
-        #     # enc_entries[0].insert(0, str(packets[0][12 :-4]))
-        #     # enc_entries[0].insert(0, "yo")
-        time.sleep(0.01)
-
-
+#--------------------------------------------------------------------------------------------------------------------
+# single module class
+#--------------------------------------------------------------------------------------------------------------------
 class module():
 
     module_id = ''
@@ -111,12 +62,12 @@ class module():
     button = ''
     angle = 0
 
-    def __init__(self, module_id,angle,led_value,button, queue):
+    def __init__(self, module_id,angle,led_value,button): #, queue):
             self.module_id  = module_id
             self.led_value  = led_value
             self.button     = button
-            self.queue      = queue
-
+            #self.queue      = queue
+    
     def send_packet(self, packet):
         for i in packet:
             ser.write(i)
@@ -183,7 +134,6 @@ class module():
 
       print ':'.join(x.encode('hex') for x in packet)
 
-
     def read_enc(self):
       print '------------------------'
       packet = packet_start + packet_pointer + self.module_id + packet_divider + '0' + packet_end
@@ -209,30 +159,9 @@ class module():
     def read_led(self):
         print 'readLed method prototype'
 
-    def store_path(self):#
+    def store_path(self):
         packet = packet_start + packet_pointer + self.module_id + packet_divider + 'p' + packet_end
         self.send_packet(packet)
-
-    def watch_serial():
-        global packets
-        global enc_entries
-
-        incoming_packet  = list()
-        print "started!"
-        while (1):
-            char = ser.read().encode('hex')
-            incoming_packet += char
-            incoming_packet += ':'
-            if (char == packet_end.encode('hex')):
-                print incoming_packet[:-1]
-                packets[0] = incoming_packet
-                incoming_packet = ""
-
-                # functional, but slow way to do this
-                # enc_entries[0].config(state = NORMAL)
-                # enc_entries[0].delete(0,END)
-                # enc_entries[0].insert(0, str(packets[0][12 :-4]))
-                # enc_entries[0].config(state = DISABLED)
 
     def toggle_led(self):
         if self.led_value >= 128:
@@ -247,86 +176,155 @@ class module():
             print 'toggle LED: ' + str(self.module_id) + ' ON'
         self.send_packet(packet)
 
+
+#--------------------------------------------------------------------------------------------------------------------
+# zmeika window class
+#--------------------------------------------------------------------------------------------------------------------
 class Zmeika(Frame):
 
    # global serial_queue
 
     global module_list
 
+    enc_entries = list()
 
-    #===================#===================#===================
+    led_buttons = list()
+    led_sliders = list()
+
+    enc_buttons = list()
+    enc_sliders = list()
+
+
+    #-----------------------------
     # initialization
-    #===================#===================#===================
-
+    #-----------------------------
     def __init__(self, master=None):
 
         Frame.__init__(self, master)
         self.grid(row = 0, column  = 0)
         self.createWidgets()
+        
+        #running serial monitor in a separate thread to keep GUI responsive
+        serial_monitor = threading.Thread(target=self.watch_serial)
+        serial_monitor.daemon = True
+        serial_monitor.start()
+        
+        #wanted to run this in a separate thread as well, but then the enc_entries in not acessible
+        self.update_GUI()
+        
+
+    #-----------------------------
+    # GUI updater function
+    #-----------------------------
+    def update_GUI(self):
+        global serial_queue
+        if not serial_queue.empty():
+            self.enc_entries[0].delete(0,END)
+            self.enc_entries[0].insert(0, str(serial_queue.get()))
+
+        #emulating an infinite loop this way, as otherwise it blocks the GUI thread
+        self.after(100,self.update_GUI)
+
+    #-----------------------------
+    # serial monitor function
+    #-----------------------------
+    def watch_serial(self):
+        incoming_packet  = list()
+
+        print "serial monitor started!"
+
+        while True:
+            char = ser.read().encode('hex')
+            incoming_packet += char
+            incoming_packet += ':'
+            if (char == packet_end.encode('hex')):
+                print incoming_packet[:-1]
+                #packets[0] = incoming_packet
+                serial_queue.put(incoming_packet)
+                incoming_packet = ""
+
+    #-----------------------------
+    # make the GUI elements function
+    #-----------------------------
 
     def createWidgets(self):
 
-        global enc_entries
-
-        led_buttons = list()
-        led_sliders = list()
-
-        enc_buttons = list()
-        enc_sliders = list()
-
-
         a = ''
 
-        # initializing buttons and sliders
+        #-----------------------------
+        # creating GUI elements
+        #-----------------------------
         for i in range(num_modules):
+            #-----------------------------
+            # LED slider, button
+            #-----------------------------
             l_s = Scale(self, from_=255, to=0)
             l_b = Button(self, text = 'OFF')
+            
             l_s.grid(row = 0, column = i * 2)
             l_b.grid(row = 1, column = i * 2)
-            led_buttons.append(l_b)
-            led_sliders.append(l_s)
+            
+            self.led_buttons.append(l_b)
+            self.led_sliders.append(l_s)
 
-            e_s = Scale(self, from_=255, to=0)
-            e_b = Button(self, text = 'read \n enc')
-            e_e = Entry(self, text = 'packet here')#, state = DISABLED)
+            #-----------------------------
+            # encoder slider, button , entry field
+            #-----------------------------
+            #e_s = Scale(self, from_=255, to=0)
+            #e_b = Button(self, text = 'read \n enc')
+            #e_e = Entry(self, text = 'packet here')#, state = DISABLED)
+            
+            #e_s.grid(row = 0, column = i*2 + 1)
+            #e_b.grid(row = 1, column = i*2 + 1)
+            #e_e.grid(row = 2, column = (i * 2), columnspan = 1)
 
-            e_s.grid(row = 0, column = i*2 + 1)
-            e_b.grid(row = 1, column = i*2 + 1)
-            e_e.grid(row = 2, column = (i * 2), columnspan = 2)
+            #enc_sliders.append(e_s)
+            #enc_buttons.append(e_b)
+            #self.enc_entries.append(e_e)
 
-            # e_e.insert(0,'abc')
+            #e_e.insert(0, 'yo')
 
-            enc_buttons.append(e_b)
-            enc_sliders.append(e_s)
-            enc_entries.append(e_e)
+            self.enc_entries.insert(i, Entry(self))
+            self.enc_entries[i].grid(row=2,column=(i*2),columnspan=1)
+            self.enc_entries[i].insert(0, 'yo' + str(i))
+            # self.enc_entries[i].delete(0,2)
+            # self.enc_entries[i].insert(1,'zzz')
 
+            print "encoder entry " + str(self.enc_entries[i].get()) + ' added'
+
+        #-----------------------------
         # initializing modules
+        #-----------------------------
         for i in range(num_modules):
-            m = module(a, 0, 0, led_buttons[i], serial_queue)
-            led_buttons[i]["command"] = m.toggle_led
-            led_sliders[i]["command"] = m.set_led
+            m = module(a, 0, 0, self.led_buttons[i])#, serial_queue)
+            self.led_buttons[i]["command"] = m.toggle_led
+            self.led_sliders[i]["command"] = m.set_led
             #enc_buttons[i]["command"] = m.read_enc
-            m.store_path() 
             module_list.append(m)
             a += '1'
+            m.store_path() 
+            print 'storing module path: ' + m.module_id
 
         self.QUIT = Button(self, text = "QUIT", fg = "red",
-          command = self.quit).grid(row = 3, column = 0)
+          command = quit).grid(row = 3, column = 0)
 
-        self.led_buttons = led_buttons
-        self.led_sliders = led_sliders
-
+#--------------------------------------------------------------------------------------------------------------------
 
 root = Tk()
 app = Zmeika(master=root)
 
-serial_monitor = threading.Thread(target=watch_serial)
-serial_monitor.start()
-
-#gui_updater = threading.Thread(target = update_GUI)
-#gui_updater.start()
-
 
 app.mainloop()
 
-root.destroy()
+#-----------------------------
+# do on quit
+#-----------------------------
+
+def quit():  
+  ser.close()
+  global root
+  root.destroy()
+
+
+
+

@@ -20,15 +20,26 @@
 #define PWM_port PORTA
 #define PWM_direction  DDRA
 
-//#define BLINK PINA = _BV(5);
+//#define BLINK PINA = _BV(5)
 
 volatile int16_t position = 0;
-//volatile int16_t lastPosition = 0;
 volatile bool position_changed = false;
 static volatile uint8_t state = 0;
 
 unsigned char path_to_host[apa_max_packet];
 unsigned char path_to_host_length = 0;
+bool path_to_host_stored = false;
+
+void blink3(){
+   unsigned char i = 0;
+   for (i; i <3; i++){
+      PORTA |= _BV(PA5); // turn LED ON
+      _delay_ms(100);  // wait 1 sec
+      PORTA &= ~(_BV(PA5)); // turn LED OFF
+      _delay_ms(100);
+   }
+
+}
 
 //
 // process the packet
@@ -96,9 +107,12 @@ void apa_process_packet(struct apa_port_type *port) {
       case 'p': // save path to host for future usage
          for (i = 0; i < port->path_out_length; ++i)
             path_to_host[i] = port->path_out[i];
+            //path_to_host[i] = '0';
          path_to_host_length = port->path_out_length;
          port->payload_out[0] = port->id;
          port->payload_out_length = 1;
+         path_to_host_stored = true;
+         blink3();
          break;
 
       case ' ':   // do nothing
@@ -184,7 +198,7 @@ void apa_encoder_check(struct apa_port_type *port) {
 
    unsigned char i;
 
-   if (position_changed && (path_to_host_length != 0)){
+   if (position_changed && path_to_host_stored){
       
       position_changed = false;
 
@@ -217,21 +231,21 @@ int main(void) {
    //
    // using blue led to debug encoder readouts
    // 
-   // DDRA |= _BV(PA5); // set pin PA5 as an output
-   // PORTA |= _BV(PA5); // turn LED ON
-   // _delay_ms(1000);  // wait 1 sec
-   // PORTA &= ~(_BV(PA5)); // turn LED OFF
+   DDRA |= _BV(PA5); // set pin PA5 as an output
+   PORTA |= _BV(PA5); // turn LED ON
+   _delay_ms(1000);  // wait 1 sec
+   PORTA &= ~(_BV(PA5)); // turn LED OFF
 
    //
    // set up PWM pins
    //
-   TCCR1A = ((1 << COM1B1) | (1 << COM1B0) | (1 << WGM11)
-      | (1 << WGM10)); // clear OC1B on compare match, fast 8-bit PWM
-   TCCR1B = ((0 << WGM13) | (1 << WGM12) | (0 << CS12) | (0 << CS11)
-      | (1 << CS10)); // /1 clock divider
-   OCR1B = 1023;
-   clear(PWM_port, PWM_pin);
-   output(PWM_direction, PWM_pin);
+   // TCCR1A = ((1 << COM1B1) | (1 << COM1B0) | (1 << WGM11)
+   //    | (1 << WGM10)); // clear OC1B on compare match, fast 8-bit PWM
+   // TCCR1B = ((0 << WGM13) | (1 << WGM12) | (0 << CS12) | (0 << CS11)
+   //    | (1 << CS10)); // /1 clock divider
+   // OCR1B = 1023;
+   // clear(PWM_port, PWM_pin);
+   // output(PWM_direction, PWM_pin);
 
    //
    // initialize ports and pins
@@ -276,6 +290,8 @@ int main(void) {
    // power on delay
    //
    power_on_delay();
+
+   blink3();
 
    //
    // configure interrupt pins
