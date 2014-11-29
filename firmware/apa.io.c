@@ -38,7 +38,6 @@ void blink3(){
       PORTA &= ~(_BV(PA5)); // turn LED OFF
       _delay_ms(100);
    }
-
 }
 
 //

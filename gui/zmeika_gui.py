@@ -13,7 +13,7 @@ import Queue
 import threading
 import os
 
-num_modules = 4
+num_modules = 2
 
 serial_monitor_flag = True
 
@@ -33,6 +33,10 @@ packet_end = '}'
 packet_escape = '\\'
 timeout_count = 1000
 char_delay = 0.001
+
+#packet divider hex-string representation
+pd = str(packet_divider.encode('hex'))
+
 
 #--------------------------------------------------------------------------------------------------------------------
 # single module class
@@ -182,6 +186,8 @@ class Zmeika(Frame):
     enc_buttons = list()
     enc_sliders = list()
 
+    
+
 
     #-----------------------------
     # initialization
@@ -199,6 +205,11 @@ class Zmeika(Frame):
         
         #wanted to run this in a separate thread as well, but then the enc_entries in not acessible
         self.update_GUI()
+
+        time.sleep(1.0)
+        self.module_list[0].store_path()
+        time.sleep(2.0)
+        self.module_list[1].store_path()
         
 
     #-----------------------------
@@ -206,27 +217,20 @@ class Zmeika(Frame):
     #-----------------------------
     def update_GUI(self):
         global serial_queue
+        global pd
         if not serial_queue.empty():
-
             p = ''
-
             for j in serial_queue.get().split(':'):
-                 #p += unichr(int(j,16))
                  p+= j
 
-            #p = serial_queue.get()
+            d = p.find(pd) # packet divider location
+            #select the origin module
+            a = (d - 2 )/ 2 - 1
 
-            pd = str(packet_divider.encode('hex'))
-
-            #p = p.find(str(packet_divider.encode('hex')))
-            
-            a = (p.find(pd) - 2 )/ 2 - 1
+            s = 'node: (' + str(p[d-2-2*a:d-2].decode('hex'))+ ') | ' + str(int(p[-4:-2],16))
             
             self.enc_entries[a].delete(0,END)
-            
-            # #self.enc_entries[0].insert(0, str(serial_queue.get()))
-            
-            self.enc_entries[a].insert(0, int(p[-4:-2],16))
+            self.enc_entries[a].insert(0, s)
 
         #emulating an infinite loop this way, as otherwise it blocks the GUI thread
         self.after(10,self.update_GUI)
@@ -241,16 +245,9 @@ class Zmeika(Frame):
 
         while True:
             char = ser.read().encode('hex')
-            #char = char.decode('utf-8')
-            #char = ser.read().encode('hex')
-            #incoming_packet += chr(int(char, 16))
-            #print unichr(int(char,16))
             incoming_packet += char
             incoming_packet += ':'
             if (char == packet_end.encode('hex')):
-                #print incoming_packet
-                #print 'hello'[:-1]
-                #packets[0] = incoming_packet
                 serial_queue.put(incoming_packet[:-1])
                 incoming_packet = ""
 
@@ -285,7 +282,7 @@ class Zmeika(Frame):
 
         # for i in range(num_modules):
         #     self.module_list[i].store_path()
-        #     time.sleep(0.1)
+        #     time.sleep(0.2)
 
 
         self.QUIT = Button(self, text = "QUIT", fg = "red",
