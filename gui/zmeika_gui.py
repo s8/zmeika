@@ -1,8 +1,10 @@
-
-# TO DO:
-# on quit the serial port leaves hanging open
-#
-#
+# //
+# // zmeika_gui.py
+# //
+# // python/Tkinter gui for zmeika digital puzzle
+# //
+# // Konstantin Leonenko 2014
+# //
 
 
 from Tkinter import *
@@ -11,22 +13,15 @@ import Queue
 import threading
 import os
 
-serial_monitor_flag = True
+num_modules = 4
 
+serial_monitor_flag = True
 
 ser = serial.Serial("/dev/tty.usbserial-A603OPB4", 57600)
 ser.flushInput()
 ser.flushOutput()
 
-
-#packets = list()
-#packets.append ('abc')
-
 serial_queue = Queue.Queue()
-
-num_modules = 2
-
-
 
 #----------------------------------------------------------
 # define special APA chars
@@ -38,8 +33,6 @@ packet_end = '}'
 packet_escape = '\\'
 timeout_count = 1000
 char_delay = 0.001
-
-
 
 #--------------------------------------------------------------------------------------------------------------------
 # single module class
@@ -61,16 +54,16 @@ class module():
     # check for waiting chars and exit on timeout
     #----------------------------------------------------------
     def check_waiting():
-       check_count = 0
-       while 1:
-          if (0 != ser.inWaiting()):
-             break
-          check_count += 1
-          if (check_count == timeout_count):
-             print "check_waiting: timeout"
-             sys.exit()
-          time.sleep(char_delay)
-       return
+        check_count = 0
+        while 1:
+            if (0 != ser.inWaiting()):
+                break
+            check_count += 1
+            if (check_count == timeout_count):
+                print "check_waiting: timeout"
+                sys.exit()
+            time.sleep(char_delay)
+        return
     
     def send_packet(self, packet):
         for i in packet:
@@ -78,74 +71,65 @@ class module():
             time.sleep(char_delay)
 
     def read_packet(self):
-      packet = ""
-      chr0 = ''
-      count = 0
-      while (chr0 != packet_start): # start
-         check_waiting()
-         chr0 = ser.read()
-         count += 1
-         if (count == timeout_count):
-            print "apa.serial.test.py: timeout"
-            sys.exit()
-      packet += chr0
-      #print 'chr 0 = ' +chr0
-      chr0 = ''
-      count = 0
-      while (chr0 != packet_pointer): # pointer
-         check_waiting()
-         chr0 = ser.read()
-         count += 1
-         if (count == timeout_count):
-            print "apa.serial.test.py: timeout"
-            sys.exit()
-         packet += chr0
-      #print 'chr 1 = ' +chr0
-      chr0 = ''
-      count = 0
-      while (chr0 != packet_divider): # divider
-         check_waiting()
-         chr0 = ser.read()
-         count += 1
-         if (count == timeout_count):
-            print "apa.serial.test.py: timeout"
-            sys.exit()
-         packet += chr0
-      #print 'chr 2 = ' +chr0
-      chr0 = ''
-      count = 0
-      while (chr0 != packet_end): # end
-         check_waiting()
-         chr0 = ser.read()
-         #print 'chr a = ' +chr0
-         count += 1
-         if (count == timeout_count):
-            print "apa.serial.test.py: timeout"
-            sys.exit()
-         if (chr0 != packet_escape):
-            #print 'chr b = ' +chr0
-            packet += chr0
-         else:
+        packet = ""
+        chr0 = ''
+        count = 0
+        while (chr0 != packet_start): # start
             check_waiting()
-            chr0 = ser.read() # read escaped char
-            #print 'chr c = ' +chr0
-            packet += chr0
+            chr0 = ser.read()
+            count += 1
+            if (count == timeout_count):
+                print "apa.serial.test.py: timeout"
+                sys.exit()
+        packet += chr0
+        #print 'chr 0 = ' +chr0
+        chr0 = ''
+        count = 0
+        while (chr0 != packet_pointer): # pointer
             check_waiting()
-            chr0 = ser.read() # read next char
-            #print 'chr d = ' +chr0
+            chr0 = ser.read()
+            count += 1
+            if (count == timeout_count):
+                print "apa.serial.test.py: timeout"
+                sys.exit()
             packet += chr0
-      print "received packet: "+packet
+        #print 'chr 1 = ' +chr0
+        chr0 = ''
+        count = 0
+        while (chr0 != packet_divider): # divider
+            check_waiting()
+            chr0 = ser.read()
+            count += 1
+            if (count == timeout_count):
+                print "apa.serial.test.py: timeout"
+                sys.exit()
+            packet += chr0
+        #print 'chr 2 = ' +chr0
+        chr0 = ''
+        count = 0
+        while (chr0 != packet_end): # end
+            check_waiting()
+            chr0 = ser.read()
+            #print 'chr a = ' +chr0
+            count += 1
+            if (count == timeout_count):
+                print "apa.serial.test.py: timeout"
+                sys.exit()
+            if (chr0 != packet_escape):
+                #print 'chr b = ' +chr0
+                packet += chr0
+            else:
+                check_waiting()
+                chr0 = ser.read() # read escaped char
+                #print 'chr c = ' +chr0
+                packet += chr0
+                check_waiting()
+                chr0 = ser.read() # read next char
+                #print 'chr d = ' +chr0
+                packet += chr0
+        print "received packet: "+packet
 
-      print ':'.join(x.encode('hex') for x in packet)
-
-    def read_enc(self):
-      print '------------------------'
-      packet = packet_start + packet_pointer + self.module_id + packet_divider + '0' + packet_end
-      self.send_packet(packet)
-      self.read_packet()
-      # packet = packet_start + packet_pointer + self.module_id + packet_divider + '2' + packet_end
-      # self.send_packet(packet)
-      # self.read_packet()
+        print ':'.join(x.encode('hex') for x in packet)
 
     def set_led(self, led_value):
         self.led_value = led_value
@@ -164,6 +148,7 @@ class module():
         print 'readLed method prototype'
 
     def store_path(self):
+        print 'poking module ' + str(self.module_id)
         packet = packet_start + packet_pointer + self.module_id + packet_divider + 'p' + packet_end
         self.send_packet(packet)
 
@@ -179,7 +164,6 @@ class module():
             self.button["text"] = 'ON'
             print 'toggle LED: ' + str(self.module_id) + ' ON'
         self.send_packet(packet)
-
 
 #--------------------------------------------------------------------------------------------------------------------
 # zmeika window class
@@ -223,28 +207,51 @@ class Zmeika(Frame):
     def update_GUI(self):
         global serial_queue
         if not serial_queue.empty():
-            self.enc_entries[0].delete(0,END)
-            self.enc_entries[0].insert(0, str(serial_queue.get()))
+
+            p = ''
+
+            for j in serial_queue.get().split(':'):
+                 #p += unichr(int(j,16))
+                 p+= j
+
+            #p = serial_queue.get()
+
+            pd = str(packet_divider.encode('hex'))
+
+            #p = p.find(str(packet_divider.encode('hex')))
+            
+            a = (p.find(pd) - 2 )/ 2 - 1
+            
+            self.enc_entries[a].delete(0,END)
+            
+            # #self.enc_entries[0].insert(0, str(serial_queue.get()))
+            
+            self.enc_entries[a].insert(0, int(p[-4:-2],16))
 
         #emulating an infinite loop this way, as otherwise it blocks the GUI thread
-        self.after(100,self.update_GUI)
+        self.after(10,self.update_GUI)
 
     #-----------------------------
     # serial monitor function
     #-----------------------------
     def watch_serial(self):
-        incoming_packet  = list()
+        incoming_packet  = ''
 
         print "serial monitor started!"
 
         while True:
             char = ser.read().encode('hex')
+            #char = char.decode('utf-8')
+            #char = ser.read().encode('hex')
+            #incoming_packet += chr(int(char, 16))
+            #print unichr(int(char,16))
             incoming_packet += char
             incoming_packet += ':'
             if (char == packet_end.encode('hex')):
-                print incoming_packet[:-1]
+                #print incoming_packet
+                #print 'hello'[:-1]
                 #packets[0] = incoming_packet
-                serial_queue.put(incoming_packet)
+                serial_queue.put(incoming_packet[:-1])
                 incoming_packet = ""
 
     #-----------------------------
@@ -274,9 +281,12 @@ class Zmeika(Frame):
             self.led_buttons[i]["command"] = self.module_list[i].toggle_led
             self.led_sliders[i]["command"] = self.module_list[i].set_led
 
-            self.module_list[i].store_path()
-
             a += '1'
+
+        # for i in range(num_modules):
+        #     self.module_list[i].store_path()
+        #     time.sleep(0.1)
+
 
         self.QUIT = Button(self, text = "QUIT", fg = "red",
           command = quit).grid(row = 3, column = 0)
