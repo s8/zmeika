@@ -13,18 +13,20 @@ import os
 
 serial_monitor_flag = True
 
+
+ser = serial.Serial("/dev/tty.usbserial-A603OPB4", 57600)
+ser.flushInput()
+ser.flushOutput()
+
+
 #packets = list()
 #packets.append ('abc')
 
 serial_queue = Queue.Queue()
 
-module_list = list()
-
 num_modules = 2
 
-ser = serial.Serial("/dev/tty.usbserial-A603OPB4", 57600)
-ser.flushInput()
-ser.flushOutput()
+
 
 #----------------------------------------------------------
 # define special APA chars
@@ -37,20 +39,7 @@ packet_escape = '\\'
 timeout_count = 1000
 char_delay = 0.001
 
-#----------------------------------------------------------
-# check for waiting chars and exit on timeout
-#----------------------------------------------------------
-def check_waiting():
-   check_count = 0
-   while 1:
-      if (0 != ser.inWaiting()):
-         break
-      check_count += 1
-      if (check_count == timeout_count):
-         print "check_waiting: timeout"
-         sys.exit()
-      time.sleep(char_delay)
-   return
+
 
 #--------------------------------------------------------------------------------------------------------------------
 # single module class
@@ -67,6 +56,21 @@ class module():
             self.led_value  = led_value
             self.button     = button
             #self.queue      = queue
+
+    #----------------------------------------------------------
+    # check for waiting chars and exit on timeout
+    #----------------------------------------------------------
+    def check_waiting():
+       check_count = 0
+       while 1:
+          if (0 != ser.inWaiting()):
+             break
+          check_count += 1
+          if (check_count == timeout_count):
+             print "check_waiting: timeout"
+             sys.exit()
+          time.sleep(char_delay)
+       return
     
     def send_packet(self, packet):
         for i in packet:
@@ -184,7 +188,7 @@ class Zmeika(Frame):
 
    # global serial_queue
 
-    global module_list
+    module_list = list()
 
     enc_entries = list()
 
@@ -255,55 +259,24 @@ class Zmeika(Frame):
         # creating GUI elements
         #-----------------------------
         for i in range(num_modules):
-            #-----------------------------
-            # LED slider, button
-            #-----------------------------
-            l_s = Scale(self, from_=255, to=0)
-            l_b = Button(self, text = 'OFF')
-            
-            l_s.grid(row = 0, column = i * 2)
-            l_b.grid(row = 1, column = i * 2)
-            
-            self.led_buttons.append(l_b)
-            self.led_sliders.append(l_s)
+  
+            self.led_buttons.insert(i, Button(self, text = 'OFF'))
+            self.led_buttons[i].grid(row = 1, column = i * 2)
 
-            #-----------------------------
-            # encoder slider, button , entry field
-            #-----------------------------
-            #e_s = Scale(self, from_=255, to=0)
-            #e_b = Button(self, text = 'read \n enc')
-            #e_e = Entry(self, text = 'packet here')#, state = DISABLED)
-            
-            #e_s.grid(row = 0, column = i*2 + 1)
-            #e_b.grid(row = 1, column = i*2 + 1)
-            #e_e.grid(row = 2, column = (i * 2), columnspan = 1)
-
-            #enc_sliders.append(e_s)
-            #enc_buttons.append(e_b)
-            #self.enc_entries.append(e_e)
-
-            #e_e.insert(0, 'yo')
+            self.led_sliders.insert(i, Scale(self, from_=255, to=0))
+            self.led_sliders[i].grid(row = 0, column = i * 2)
 
             self.enc_entries.insert(i, Entry(self))
             self.enc_entries[i].grid(row=2,column=(i*2),columnspan=1)
-            self.enc_entries[i].insert(0, 'yo' + str(i))
-            # self.enc_entries[i].delete(0,2)
-            # self.enc_entries[i].insert(1,'zzz')
 
-            print "encoder entry " + str(self.enc_entries[i].get()) + ' added'
+            self.module_list.insert(i, module(a, 0, 0, self.led_buttons[i]))
 
-        #-----------------------------
-        # initializing modules
-        #-----------------------------
-        for i in range(num_modules):
-            m = module(a, 0, 0, self.led_buttons[i])#, serial_queue)
-            self.led_buttons[i]["command"] = m.toggle_led
-            self.led_sliders[i]["command"] = m.set_led
-            #enc_buttons[i]["command"] = m.read_enc
-            module_list.append(m)
+            self.led_buttons[i]["command"] = self.module_list[i].toggle_led
+            self.led_sliders[i]["command"] = self.module_list[i].set_led
+
+            self.module_list[i].store_path()
+
             a += '1'
-            m.store_path() 
-            print 'storing module path: ' + m.module_id
 
         self.QUIT = Button(self, text = "QUIT", fg = "red",
           command = quit).grid(row = 3, column = 0)
