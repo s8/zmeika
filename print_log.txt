@@ -1,0 +1,9 @@
+01/12/2014
+purple PLA
+zmeika_block_08_b.stl
+layer height:0.2
+shell thickness:2
+bottom/top thickness:1.2
+fill density: 50%
+print speed: 100
+
